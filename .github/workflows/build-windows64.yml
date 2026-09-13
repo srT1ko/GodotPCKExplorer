@@ -1,232 +1,75 @@
-name: 🛠️ .NET Desktop
+name: Build Windows x64 (Explorer UI + Bruteforcer UI/Console)
 
 on:
   push:
-    paths-ignore: [HexEditorStructures/**, Images/**, Core/mbedTLS_AES/**, "README.md", "LICENSE", ".gitignore*", ".github/**/util_*", ".github/ISSUE_TEMPLATE/**"]
+    branches: [ main, master ]
   pull_request:
-    paths-ignore: [HexEditorStructures/**, Images/**, Core/mbedTLS_AES/**, "README.md", "LICENSE", ".gitignore*", ".github/**/util_*", ".github/ISSUE_TEMPLATE/**"]
-
-# Stop the same workflow actions
-concurrency:
-  group: ${{github.workflow}}-${{github.event.pull_request.number || github.ref}}
-  cancel-in-progress: true
-
-env:
-  ARTIFACT_PREFIX: GodotPCKExplorer
+    branches: [ main, master ]
+  workflow_dispatch:   # Permite ejecutarlo manualmente desde la pestaña Actions
 
 jobs:
-  get_version:
-    name: Get the current version
-    runs-on: ubuntu-latest
-    outputs:
-      version: ${{steps.getversion.outputs.version}}
-      artifact_name: ${{steps.getversion.outputs.artifact_name}}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          sparse-checkout: version.txt
-      - id: getversion
-        run: |
-          echo "Version: $(cat version.txt)"
-          echo "version=$(cat version.txt)" >> $GITHUB_OUTPUT
-          echo "Artifact name: ${{env.ARTIFACT_PREFIX}}_$(cat version.txt)"
-          echo "artifact_name=${{env.ARTIFACT_PREFIX}}_$(cat version.txt)" >> $GITHUB_OUTPUT
-
-  build_framework:
-    name: Build Framework
-    needs: get_version
-
-    # For WinForms build
+  build-windows:
     runs-on: windows-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # Setup dotnet and cache
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '9.0.x'
-          #cache: true
-          #cache-dependency-path: '**/packages.lock.json'
-
-      - name: Build Explorer
-        shell: bash
-        run: |
-          dotnet build Explorer/UI/GodotPCKExplorer.UI.csproj -c Debug -o bin/ExplorerDbg
-          dotnet build Explorer/UI/GodotPCKExplorer.UI.csproj -c Release -o bin/ExplorerRel
-
-      - name: Prepare artifacts
-        shell: powershell
-        run: |
-          Remove-Item bin/ExplorerRel/* -Recurse -Include *.exp,*.lib,*.pdb -Force
-
-      - name: Upload Debug artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{env.ARTIFACT_PREFIX}}_Debug
-          path: bin/ExplorerDbg
-
-      - name: Upload Release artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{needs.get_version.outputs.artifact_name}}_dotnet-ui-console-win-linux-mac
-          path: bin/ExplorerRel
-
-      - name: Build Bruteforcer
-        run: |
-          dotnet build Bruteforcer/UI/PCKBruteforcer.UI.csproj -o bin/Bruteforcer
-
-
-  publish_folder:
-    name: Publish Folder
-    needs: get_version
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      # Setup dotnet and cache
-      - uses: actions/setup-dotnet@v4
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '9.0.x'
 
-      - name: Publish
-        shell: bash
-        run: |
-          dotnet publish Explorer/Console/GodotPCKExplorer.Console.csproj -p:PublishProfile=Win64   -o  publish/Win64
-          dotnet publish Explorer/Console/GodotPCKExplorer.Console.csproj -p:PublishProfile=Win86   -o  publish/Win86
-          dotnet publish Explorer/Console/GodotPCKExplorer.Console.csproj -p:PublishProfile=Linux64 -o  publish/Linux64
-          dotnet publish Explorer/Console/GodotPCKExplorer.Console.csproj -p:PublishProfile=Mac64   -o  publish/Mac64
-          dotnet publish Explorer/Console/GodotPCKExplorer.Console.csproj -p:PublishProfile=MacArm  -o  publish/MacArm
+      # ---------- GodotPCKExplorer UI ----------
+      - name: Publish GodotPCKExplorer UI (Windows x64 self-contained)
+        run: >
+          dotnet publish Explorer/UI/GodotPCKExplorer.UI.csproj
+          -c Release
+          -r win-x64
+          --self-contained true
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -o ./publish/explorer-ui-win-x64
 
-      - name: Prepare artifacts
-        shell: bash
-        run: |
-          find publish/ -type f \( -name "*.exp" -o -name "*.lib" -o -name "*.pdb" \) -exec rm -f {} +
+      # ---------- Bruteforcer UI ----------
+      - name: Publish Bruteforcer UI (Windows x64 self-contained)
+        run: >
+          dotnet publish Bruteforcer/UI/PCKBruteforcer.UI.csproj
+          -c Release
+          -r win-x64
+          --self-contained true
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -o ./publish/bruteforcer-ui-win-x64
 
-          cleanup_mbedtls() {
-            echo "mbedTLS cleanup is started in $1 for $2."
-            working_dir="$1"
-            keep_dir="$2"
-            base_dir="mbedTLS"
+      # ---------- Bruteforcer Console ----------
+      - name: Publish Bruteforcer Console (Windows x64 self-contained)
+        run: >
+          dotnet publish Bruteforcer/Console/PCKBruteforcer.Console.csproj
+          -c Release
+          -r win-x64
+          --self-contained true
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -o ./publish/bruteforcer-console-win-x64
 
-            pushd "$working_dir" > /dev/null
-
-            if [ ! -d "$base_dir/$keep_dir" ]; then
-              echo "Folder '$keep_dir' not found in '$base_dir'."
-              return 1
-            fi
-
-            for dir in "$base_dir"/*; do
-              if [ -d "$dir" ] && [ "$(basename "$dir")" != "$keep_dir" ]; then
-                echo "Removing: $dir"
-                rm -rf "$dir"
-              fi
-            done
-
-            popd > /dev/null
-            echo "mbedTLS cleanup is complete."
-            echo ""
-          }
-
-          cleanup_mbedtls "publish/Win64"   "win_x64"
-          cleanup_mbedtls "publish/Win86"   "win_x86"
-          cleanup_mbedtls "publish/Linux64" "linux_x64"
-          cleanup_mbedtls "publish/Mac64"   "mac_universal"
-          cleanup_mbedtls "publish/MacArm"  "mac_universal"
-
-      - name: Upload Win64
+      # ---------- Upload artifacts ----------
+      - name: Upload GodotPCKExplorer UI
         uses: actions/upload-artifact@v4
         with:
-          name: ${{needs.get_version.outputs.artifact_name}}_native-console-win-64
-          path: publish/Win64
+          name: GodotPCKExplorer-UI-win-x64
+          path: ./publish/explorer-ui-win-x64
 
-      - name: Upload Win86
+      - name: Upload Bruteforcer UI
         uses: actions/upload-artifact@v4
         with:
-          name: ${{needs.get_version.outputs.artifact_name}}_native-console-win-86
-          path: publish/Win86
+          name: PCKBruteforcer-UI-win-x64
+          path: ./publish/bruteforcer-ui-win-x64
 
-      - name: Upload Linux64
+      - name: Upload Bruteforcer Console
         uses: actions/upload-artifact@v4
         with:
-          name: ${{needs.get_version.outputs.artifact_name}}_native-console-linux-64
-          path: publish/Linux64
-
-      - name: Upload Temp Mac64
-        uses: actions/upload-artifact@v4
-        with:
-          name: thin_mac_64
-          path: publish/Mac64
-
-      - name: Upload Temp MacArm
-        uses: actions/upload-artifact@v4
-        with:
-          name: thin_mac_arm
-          path: publish/MacArm
-
-
-  fat_mac:
-    name: Fat macOS
-    needs: 
-      - publish_folder
-      - get_version
-    runs-on: macos-latest
-
-    steps:
-      - name: Download macOS Thin bins x64
-        uses: actions/download-artifact@v4
-        with:
-          path: publish/Mac64
-          name: thin_mac_64
-
-      - name: Download macOS Thin bins arm64
-        uses: actions/download-artifact@v4
-        with:
-          path: publish/MacArm
-          name: thin_mac_arm
-
-      - name: Combine
-        shell: bash
-        run: |
-          mkdir publish/MacUniversal
-          bin_name="${{env.ARTIFACT_PREFIX}}.Console"
-          lipo -create -output publish/MacUniversal/$bin_name publish/Mac64/$bin_name publish/MacArm/$bin_name
-          file publish/MacUniversal/$bin_name
-
-          cp -rf publish/Mac64/mbedTLS publish/MacUniversal/mbedTLS
-
-      - name: Upload MacUniversal
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{needs.get_version.outputs.artifact_name}}_native-console-mac-universal
-          path: publish/MacUniversal
-
-
-  tests:
-    name: Tests
-    #needs: build
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      # Setup dotnet and cache
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '9.0.x'
-
-      - name: Run unit tests
-        shell: bash
-        run: dotnet test Tests -p:Parallel=0
+          name: PCKBruteforcer-Console-win-x64
+          path: ./publish/bruteforcer-console-win-x64
