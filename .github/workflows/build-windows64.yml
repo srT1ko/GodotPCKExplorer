@@ -22,13 +22,24 @@ jobs:
         with:
           dotnet-version: '9.0.x'
 
+      # ---------- GodotPCKExplorer UI ----------
+      - name: Publish GodotPCKExplorer UI (Windows x64 self-contained)
+        run: >
+          dotnet publish Explorer/UI/GodotPCKExplorer.UI.csproj
+          -c Release
+          -r win-x64
+          --self-contained false
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -o ./publish/explorer-ui-win-x64
+
       # ---------- Bruteforcer UI ----------
       - name: Publish Bruteforcer UI (Windows x64 self-contained)
         run: >
           dotnet publish Bruteforcer/UI/PCKBruteforcer.UI.csproj
           -c Release
           -r win-x64
-          --self-contained false
+          --self-contained true
           -p:PublishSingleFile=true
           -p:IncludeNativeLibrariesForSelfExtract=true
           -o ./publish/bruteforcer-ui-win-x64
@@ -39,7 +50,7 @@ jobs:
           dotnet publish Bruteforcer/Console/PCKBruteforcer.Console.csproj
           -c Release
           -r win-x64
-          --self-contained false
+          --self-contained true
           -p:PublishSingleFile=true
           -p:IncludeNativeLibrariesForSelfExtract=true
           -o ./publish/bruteforcer-console-win-x64
