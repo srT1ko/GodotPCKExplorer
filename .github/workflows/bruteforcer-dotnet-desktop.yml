@@ -1,0 +1,42 @@
+name: Build PCK Bruteforcer (UI + Console)
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch: # Permite ejecutarlo manualmente desde la pestaña "Actions"
+
+jobs:
+  build:
+    runs-on: windows-latest # Se usa Windows porque la UI lo requiere
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '9.0.x' # Usa la versión que requiera tu proyecto (el original usa .NET 9)
+
+    - name: Restore dependencies
+      run: dotnet restore
+
+    - name: Build Bruteforcer Console
+      run: dotnet publish Bruteforcer/Console/PCKBruteforcer.Console.csproj -c Release -o ./publish/console
+
+    - name: Build Bruteforcer UI
+      run: dotnet publish Bruteforcer/UI/PCKBruteforcer.UI.csproj -c Release -o ./publish/ui
+
+    - name: Upload Console Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: PCKBruteforcer-Console
+        path: ./publish/console
+
+    - name: Upload UI Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: PCKBruteforcer-UI
+        path: ./publish/ui
